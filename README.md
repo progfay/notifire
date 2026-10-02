@@ -18,6 +18,5 @@ Compiles `notifire.swift` with `swiftc -O`. The output path defaults to `./notif
 ## Usage
 
 ```sh
-./notifire     # colored paper
 ./notifire ✅  # emoji (only the first argument is used)
 ```

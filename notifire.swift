@@ -1,5 +1,10 @@
 import AppKit
 
+guard let emoji = CommandLine.arguments.dropFirst().first else {
+    fputs("usage: notifire <emoji>\n", stderr)
+    exit(1)
+}
+
 NSApplication.shared.setActivationPolicy(.prohibited) // Never activate (.accessory still steals focus on launch)
 
 // Frame of the frontmost app's topmost normal (layer 0) window
@@ -25,20 +30,10 @@ win.ignoresMouseEvents = true
 win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 win.contentView!.wantsLayer = true
 
-// Rain the emoji given as the first argument (e.g. notifire ✅); colored paper if none
-let kinds: [(CGImage?, NSColor)]
-let total: Double = CommandLine.arguments.count > 1 ? 60 : 100 // Total particle count
-if let e = CommandLine.arguments.dropFirst().first {
-    let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 36)]
-    let size = e.size(withAttributes: attrs)
-    let img = NSImage(size: size, flipped: false) { _ in e.draw(at: .zero, withAttributes: attrs); return true }
-    kinds = [(img.cgImage(forProposedRect: nil, context: nil, hints: nil), .white)] // White = no color tint
-} else {
-    // Share one white texture and tint it via cell.color
-    let paper = NSImage(size: .init(width: 16, height: 28), flipped: false) { r in NSColor.white.setFill(); r.fill(); return true }
-        .cgImage(forProposedRect: nil, context: nil, hints: nil)
-    kinds = [NSColor.systemRed, .systemYellow, .systemGreen, .systemBlue, .systemPink, .systemPurple].map { (paper, $0) }
-}
+// Rain the emoji given as the first argument (e.g. notifire ✅)
+let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 36)]
+let image = NSImage(size: emoji.size(withAttributes: attrs), flipped: false) { _ in emoji.draw(at: .zero, withAttributes: attrs); return true }
+    .cgImage(forProposedRect: nil, context: nil, hints: nil)
 
 let gravity: CGFloat = 1800 // Higher = faster rise and fall (the apex is kept at the top edge via speed)
 
@@ -53,24 +48,21 @@ let tilt = atan2(vx, vy) // Tilt from vertical
 [(CGFloat(0), CGFloat.pi / 2 - tilt), (frame.width, CGFloat.pi / 2 + tilt)].forEach { x, angle in
     let e = CAEmitterLayer()
     e.emitterPosition = .init(x: x, y: 0)
-    e.emitterCells = kinds.map { image, color in
-        let c = CAEmitterCell()
-        c.contents = image
-        c.contentsScale = win.backingScaleFactor // Scale factor of the screen the window is on
-        c.color = color.cgColor
-        c.birthRate = Float(total / (2 * Double(kinds.count)) / 0.25) // total = 2 emitters × kinds × 0.25s burst × birthRate
-        c.lifetime = 3
-        c.emissionLongitude = angle
-        c.emissionRange = .pi / 8
-        c.velocity = speed
-        c.velocityRange = speed * 0.25
-        c.yAcceleration = -gravity // AppKit's y axis points up
-        c.alphaSpeed = -1 / c.lifetime // Fade out linearly over the lifetime
-        c.spin = 4
-        c.spinRange = 8
-        c.scaleRange = 0.5
-        return c
-    }
+    let c = CAEmitterCell()
+    c.contents = image
+    c.contentsScale = win.backingScaleFactor // Scale factor of the screen the window is on
+    c.birthRate = 120 // 60 particles total = 2 emitters × 0.25s burst × birthRate
+    c.lifetime = 3
+    c.emissionLongitude = angle
+    c.emissionRange = .pi / 8
+    c.velocity = speed
+    c.velocityRange = speed * 0.25
+    c.yAcceleration = -gravity // AppKit's y axis points up
+    c.alphaSpeed = -1 / c.lifetime // Fade out linearly over the lifetime
+    c.spin = 4
+    c.spinRange = 8
+    c.scaleRange = 0.5
+    e.emitterCells = [c]
     e.beginTime = CACurrentMediaTime()
     win.contentView!.layer!.addSublayer(e)
 }
