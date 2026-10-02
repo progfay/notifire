@@ -1,7 +1,6 @@
 import AppKit
 
-let app = NSApplication.shared
-app.setActivationPolicy(.prohibited) // Never activate (.accessory still steals focus on launch)
+NSApplication.shared.setActivationPolicy(.prohibited) // Never activate (.accessory still steals focus on launch)
 
 // Frame of the frontmost app's topmost normal (layer 0) window
 // kCGWindowBounds is readable without Screen Recording permission
@@ -26,23 +25,19 @@ win.ignoresMouseEvents = true
 win.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
 win.contentView!.wantsLayer = true
 
-let scale = win.backingScaleFactor // Scale factor of the screen the window is on
-
 // Rain the emoji given as the first argument (e.g. notifire ✅); colored paper if none
 let kinds: [(CGImage?, NSColor)]
-let total: Double // Total particle count
+let total: Double = CommandLine.arguments.count > 1 ? 60 : 100 // Total particle count
 if let e = CommandLine.arguments.dropFirst().first {
     let attrs: [NSAttributedString.Key: Any] = [.font: NSFont.systemFont(ofSize: 36)]
-    let size = (e as NSString).size(withAttributes: attrs)
-    let img = NSImage(size: size, flipped: false) { _ in (e as NSString).draw(at: .zero, withAttributes: attrs); return true }
+    let size = e.size(withAttributes: attrs)
+    let img = NSImage(size: size, flipped: false) { _ in e.draw(at: .zero, withAttributes: attrs); return true }
     kinds = [(img.cgImage(forProposedRect: nil, context: nil, hints: nil), .white)] // White = no color tint
-    total = 60
 } else {
     // Share one white texture and tint it via cell.color
     let paper = NSImage(size: .init(width: 16, height: 28), flipped: false) { r in NSColor.white.setFill(); r.fill(); return true }
         .cgImage(forProposedRect: nil, context: nil, hints: nil)
     kinds = [NSColor.systemRed, .systemYellow, .systemGreen, .systemBlue, .systemPink, .systemPurple].map { (paper, $0) }
-    total = 100
 }
 
 let gravity: CGFloat = 1800 // Higher = faster rise and fall (the apex is kept at the top edge via speed)
@@ -55,13 +50,13 @@ let speed = hypot(vx, vy)
 let tilt = atan2(vx, vy) // Tilt from vertical
 
 // Raycast-style: shoot inward diagonally from both bottom corners
-let emitters = [(CGFloat(0), CGFloat.pi / 2 - tilt), (frame.width, CGFloat.pi / 2 + tilt)].map { x, angle in
+[(CGFloat(0), CGFloat.pi / 2 - tilt), (frame.width, CGFloat.pi / 2 + tilt)].forEach { x, angle in
     let e = CAEmitterLayer()
     e.emitterPosition = .init(x: x, y: 0)
     e.emitterCells = kinds.map { image, color in
         let c = CAEmitterCell()
         c.contents = image
-        c.contentsScale = scale
+        c.contentsScale = win.backingScaleFactor // Scale factor of the screen the window is on
         c.color = color.cgColor
         c.birthRate = Float(total / (2 * Double(kinds.count)) / 0.25) // total = 2 emitters × kinds × 0.25s burst × birthRate
         c.lifetime = 3
@@ -78,10 +73,9 @@ let emitters = [(CGFloat(0), CGFloat.pi / 2 - tilt), (frame.width, CGFloat.pi / 
     }
     e.beginTime = CACurrentMediaTime()
     win.contentView!.layer!.addSublayer(e)
-    return e
 }
 win.orderFrontRegardless()
 
-DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { emitters.forEach { $0.birthRate = 0 } } // Short burst
+DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { win.contentView!.layer!.sublayers!.forEach { ($0 as! CAEmitterLayer).birthRate = 0 } } // Short burst
 DispatchQueue.main.asyncAfter(deadline: .now() + 3) { exit(0) }
-app.run()
+NSApp.run()
